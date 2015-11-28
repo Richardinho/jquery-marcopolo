@@ -35,7 +35,8 @@
     "grunt-jasmine-task": "~0.2.3",
     "grunt-jquery-json": "~0.2.1",
     "grunt-pkg-to-component": "~1.0.1",
-    "grunt-saucelabs": "~2.0.0"
+    "grunt-saucelabs": "~2.0.0",
+    "phantomjs": "^1.9.19"
   },
   "scripts": {
     "test": "grunt test"
