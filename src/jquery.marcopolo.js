@@ -127,7 +127,10 @@
       // on ENTER.
       submitOnEnter: false,
       // The URL to GET request for the results.
-      url: null
+      url: null,
+			// function which carries out remote data request in place of native
+			// Ajax
+      transport : null
     },
 
     // Key code to key name mapping for easy reference.
@@ -1077,7 +1080,8 @@
             param = {},
             params = {},
             cacheKey,
-            $inputParent = $();
+            $inputParent = $(),
+            transport = options.transport;
 
         // Display the minimum characters message if not reached.
         if (q.length < options.minChars) {
@@ -1095,59 +1099,79 @@
         // Merge all parameters together.
         params = $.extend({}, data, param);
 
-        // Build the request URL with query string data to use as the cache
-        // key.
-        cacheKey = options.url + (options.url.indexOf('?') === -1 ? '?' : '&') + $.param(params);
+				var complete = function (jqXHR, textStatus) {
+					// Reset ajax reference now that it's complete.
+					self.ajax = null;
+					self.ajaxAborted = false;
 
-        // Check for and use cached results if enabled.
-        if (options.cache && cache[cacheKey]) {
-          self._buildSuccessList(q, cache[cacheKey]);
-        }
-        // Otherwise, make an ajax request for the data.
-        else {
-          self._trigger('requestBefore');
+					// Remove the "busy" indicator class on the input's parent.
+					$inputParent.removeClass('mp_busy');
+					$list.attr('aria-busy', 'false');
 
-          // Add a class to the input's parent that can be hooked-into by the
-          // CSS to show a busy indicator.
-          $inputParent = $input.parent().addClass('mp_busy');
-          $list.attr('aria-busy', 'true');
+					self._trigger('requestAfter', [jqXHR, textStatus]);
+				};
 
-          // The ajax request is stored in case it needs to be aborted.
-          self.ajax = $.ajax({
-            url: options.url,
-            dataType: 'json',
-            data: params,
-            success:
-              function (data) {
-                self._buildSuccessList(q, data);
+				var error = function(jqXHR, textStatus, errorThrown){
+					// Show the error message unless the ajax request was aborted
+					// by this plugin. 'ajaxAborted' is used because 'errorThrown'
+					// does not faithfull return "aborted" as the cause.
+					if (!self.ajaxAborted) {
+						self._buildErrorList(jqXHR, textStatus, errorThrown);
+					}
+				};
 
-                // Cache the data.
-                if (options.cache) {
-                  cache[cacheKey] = data;
-                }
-              },
-            error:
-              function (jqXHR, textStatus, errorThrown) {
-                // Show the error message unless the ajax request was aborted
-                // by this plugin. 'ajaxAborted' is used because 'errorThrown'
-                // does not faithfull return "aborted" as the cause.
-                if (!self.ajaxAborted) {
-                  self._buildErrorList(jqXHR, textStatus, errorThrown);
-                }
-              },
-            complete:
-              function (jqXHR, textStatus) {
-                // Reset ajax reference now that it's complete.
-                self.ajax = null;
-                self.ajaxAborted = false;
+				if(transport && $.isFunction(transport)){
 
-                // Remove the "busy" indicator class on the input's parent.
-                $inputParent.removeClass('mp_busy');
-                $list.attr('aria-busy', 'false');
+					self._trigger('requestBefore');
 
-                self._trigger('requestAfter', [jqXHR, textStatus]);
-              }
-          });
+					// Add a class to the input's parent that can be hooked-into by the
+					// CSS to show a busy indicator.
+					$inputParent = $input.parent().addClass('mp_busy');
+					$list.attr('aria-busy', 'true');
+
+					self.ajax = transport(params, function(data, textStatus, jqXHR) {
+						self._buildSuccessList(q, data);
+						complete(jqXHR, textStatus);
+					}, function (jqXHR, textStatus, errorThrown) {
+						error(jqXHR, textStatus, errorThrown);
+						complete(jqXHR, textStatus);
+					});
+				} else {
+
+					// Build the request URL with query string data to use as the cache
+						// key.
+					cacheKey = options.url + (options.url.indexOf('?') === -1 ? '?' : '&') + $.param(params);
+
+						// Check for and use cached results if enabled.
+					if (options.cache && cache[cacheKey]) {
+						self._buildSuccessList(q, cache[cacheKey]);
+					}
+        	// Otherwise, make an ajax request for the data.
+					else {
+						self._trigger('requestBefore');
+
+						// Add a class to the input's parent that can be hooked-into by the
+						// CSS to show a busy indicator.
+						$inputParent = $input.parent().addClass('mp_busy');
+						$list.attr('aria-busy', 'true');
+
+							// The ajax request is stored in case it needs to be aborted.
+						self.ajax = $.ajax({
+							url: options.url,
+							dataType: 'json',
+							data: params,
+							success: function (data) {
+								self._buildSuccessList(q, data);
+
+								// Cache the data.
+								if (options.cache) {
+									cache[cacheKey] = data;
+								}
+							},
+							error: error,
+							complete: complete
+						});
+        	}
         }
       }, options.delay);
 
